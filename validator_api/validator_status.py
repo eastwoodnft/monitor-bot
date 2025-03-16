@@ -21,15 +21,15 @@ async def get_validator_status():
                 jailed = validator["jailed"]
                 delegator_count = None  # May need /delegators endpoint
                 uptime = None  # Requires missed block data or custom logic
-                
+
                 return (
                     active,
                     voting_power,
-                    total_voting_power or 0,
-                    rank or 0,
+                    total_voting_power,
+                    rank,
                     jailed,
-                    delegator_count or 0,
-                    uptime or 0.0
+                    delegator_count,
+                    uptime
                 )
         except (aiohttp.ClientError, KeyError, ValueError) as e:
             print(f"⚠️ Error fetching validator status: {e}")
