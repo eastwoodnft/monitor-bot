@@ -10,7 +10,7 @@ async def get_latest_height():
                 response.raise_for_status()
                 data = await response.json()
                 # Extract latest block height from the RPC status
-                return int(data["result"]["sync_info"]["latest_block_height"])
+                return int(data["result"]["response"]["latest_block_height"])
         except (aiohttp.ClientError, KeyError, ValueError) as e:
             print(f"⚠️ RPC Connection error: {e}")
             return 0
