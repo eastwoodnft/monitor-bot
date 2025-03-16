@@ -1,31 +1,51 @@
 import aiohttp
 from config.settings import *
+from config.state import state
 
-async def get_latest_height():
-    url = f"{UNION_RPC}/abci_info?"
+async def get_chain_info():
+    """Get chain-wide information from public RPC"""
+    url = f"{UNION_RPC}/status"
     timeout = aiohttp.ClientTimeout(total=10)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         try:
             async with session.get(url) as response:
                 response.raise_for_status()
                 data = await response.json()
-                return int(data["result"]["response"]["last_block_height"])
+                return {
+                    'height': int(data["result"]["sync_info"]["latest_block_height"]),
+                    'avg_block_time': float(data["result"]["sync_info"]["avg_block_time"])
+                }
         except (aiohttp.ClientError, KeyError, ValueError) as e:
-            print(f"⚠️ RPC Connection error: {e}")
-            return 0
+            print(f"⚠️ Public RPC Connection error: {e}")
+            return None
+
+async def get_latest_height():
+    chain_info = await get_chain_info()
+    return chain_info['height'] if chain_info else 0
 
 async def get_missed_blocks(last_height, missed_blocks_timestamps=None):
-    url = f"{UNION_RPC}/missed_blocks?height={last_height}"
+    # Get chain info from public RPC
+    chain_info = await get_chain_info()
+    if not chain_info:
+        return 0, last_height, 0, 0
+
+    # Get signing info from public RPC
+    url = f"{UNION_RPC}/slashing/signing_info/{VALIDATOR_CONSENSUS_ADDRESS}"
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(url) as response:
                 response.raise_for_status()
                 data = await response.json()
-                missed = data["missed"]
-                current_height = data["height"]
-                total_missed = data["total_missed"]
-                avg_block_time = data["avg_block_time"]
-                return missed, current_height, total_missed, avg_block_time
+                
+                total_missed = int(data["result"]["missed_blocks_counter"])
+                
+                # Calculate missed blocks since last check
+                missed = total_missed - (state.total_missed if hasattr(state, 'total_missed') else 0)
+                if missed < 0:
+                    missed = 0
+                
+                return missed, chain_info['height'], total_missed, chain_info['avg_block_time']
+
         except (aiohttp.ClientError, KeyError) as e:
             print(f"⚠️ Error fetching missed blocks: {e}")
             return 0, last_height, 0, 0
