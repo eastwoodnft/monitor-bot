@@ -11,7 +11,7 @@ async def get_validator_status():
     try:
         # Get validator node status (sync info, voting power)
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-            async with session.get(f"{VALIDATOR_RPC}/status?") as response:
+            async with session.get(f"{VALIDATOR_RPC}/status") as response:
                 response.raise_for_status()
                 data = await response.json()
                 validator_info = data["result"]["validator_info"]
@@ -23,7 +23,7 @@ async def get_validator_status():
                 validator_data["consensus_address"] = validator_info["address"]
                 
             # Get peer count from validator node
-            async with session.get(f"{VALIDATOR_RPC}/net_info?") as response:
+            async with session.get(f"{VALIDATOR_RPC}/net_info") as response:
                 response.raise_for_status()
                 data = await response.json()
                 validator_data["peer_count"] = len(data["result"]["peers"])
