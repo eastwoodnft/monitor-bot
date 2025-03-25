@@ -16,6 +16,7 @@ class MonitorState:
         self.total_missed = 0
         self.avg_block_time = 0
         self.active = False
+        self.status_message = "Unknown"
         self.voting_power = None
         self.total_voting_power = None
         self.rank = None
@@ -24,8 +25,8 @@ class MonitorState:
         self.uptime = None
         self.slashing_window = SLASHING_WINDOW
         self.syncing = False
-        self.last_alerts = {}  # Alert type -> timestamp
-        self.paused_until = 0  # Timestamp when pause ends
+        self.last_alerts = {}
+        self.paused_until = 0
 
 state = MonitorState()
 
@@ -79,10 +80,11 @@ async def monitor():
                 await asyncio.sleep(60)
                 continue
 
-            active, voting_power, total_voting_power, rank, jailed, delegator_count, _, syncing = await get_validator_status()
+            active, status_message, voting_power, total_voting_power, rank, jailed, delegator_count, _, syncing = await get_validator_status()
             missed, current_height, total_missed, avg_block_time = await get_missed_blocks(state.last_height, missed_blocks_timestamps)
 
             state.active = active
+            state.status_message = status_message
             state.voting_power = voting_power
             state.total_voting_power = total_voting_power
             state.rank = rank
@@ -95,24 +97,23 @@ async def monitor():
 
             append_history(history, now, state.total_missed)
 
-            print(f"State: active={state.active}, voting_power={state.voting_power}, total_missed={state.total_missed}, uptime={state.uptime}%, syncing={state.syncing}")
+            print(f"State: active={state.active}, status={state.status_message}, voting_power={state.voting_power}, total_missed={state.total_missed}, uptime={state.uptime}%, syncing={state.syncing}")
 
-            # Alert with cooldown
             async def send_alert_if_needed(alert_type, message, cooldown=300):
                 last_sent = state.last_alerts.get(alert_type, 0)
                 if now - last_sent >= cooldown:
                     await send_telegram_alert(message)
                     state.last_alerts[alert_type] = now
 
-            if active is False and missed == -1:
+            if active is False and "error" in status_message.lower():
                 failures += 1
                 if failures >= max_failures:
-                    await send_alert_if_needed("rpc_unreachable", "🚨 *Critical Error*: RPC endpoint unreachable. Shutting down.")
+                    await send_alert_if_needed("rpc_unreachable", f"🚨 *Critical Error*: {status_message}. Shutting down.")
                     break
             else:
                 failures = 0
 
-            if not active and state.voting_power is None:
+            if not active and "not in active set" in status_message.lower():
                 await send_alert_if_needed("not_active", "*Validator is not in the active set!*")
             if jailed:
                 await send_alert_if_needed("jailed", "*Validator is jailed!* Immediate action required!")
